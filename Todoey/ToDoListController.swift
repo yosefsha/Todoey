@@ -9,13 +9,19 @@
 import UIKit
 
 class ToDoListController: UITableViewController {
-
+    let USER_DEFAULTS_DATA_KEY = "ToDoListArrayKey"
+    var itemArray: [String] = []
+    var defaults = UserDefaults.standard
+    
     override func viewDidLoad() {
         super.viewDidLoad()
-        // Do any additional setup after loading the view, typically from a nib.
+        
+        if let items = defaults.array(forKey: USER_DEFAULTS_DATA_KEY) as? [String] {
+            itemArray = items
+        }// Do any additional setup after loading the view, typically from a nib.
     }
 
-    let itemArray = ["get food", "get drink", "get a wooman"]
+
 //    override func didReceiveMemoryWarning() {
 //        super.didReceiveMemoryWarning()
 //        // Dispose of any resources that can be recreated.
@@ -50,6 +56,35 @@ class ToDoListController: UITableViewController {
         }
         
     }
-
+    
+    
+    @IBAction func addItemBtn(_ sender: UIBarButtonItem) {
+        var textField = UITextField()
+        
+        let alert = UIAlertController(title: "Add new item", message: "", preferredStyle: .alert)
+        
+        let action = UIAlertAction(title: "Add item", style: .default) { (action) in
+            // when the user clicks
+            print("success")
+            print(textField.text)
+            self.itemArray.append(textField.text!)
+            
+            self.defaults.set(self.itemArray, forKey: self.USER_DEFAULTS_DATA_KEY)
+            
+            self.tableView.reloadData()
+        }
+        
+        alert.addTextField { (alertTextField) in
+            alertTextField.placeholder = "create new item"
+            print(self)
+            textField = alertTextField
+            
+        }
+        
+        alert.addAction(action)
+        
+        present(alert, animated: true, completion: nil)
+    }
+    
 }
 
