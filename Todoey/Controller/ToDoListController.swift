@@ -7,38 +7,32 @@
 //
 
 import UIKit
-
+import CoreData
 
 class ToDoListController: UITableViewController {
-    let USER_DEFAULTS_DATA_KEY = "ToDoListArrayKey"
     var itemArray: [ToDoItem] = []
-    var defaults = UserDefaults.standard
     
-    let dataFilePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("Items.plist")
+    var selectedCategory: Category? {
+        didSet {
+            loadItems()
+        }
+    }
+    
+    @IBOutlet weak var toDoSearchBar: UISearchBar!
+    
+    //    let dataFilePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("Items.plist")
+    
+    let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
     
     override func viewDidLoad() {
         super.viewDidLoad()
         
-
+        toDoSearchBar.delegate = self
         
-        print(dataFilePath)
-        
-        
-//        let item1 = ToDoItem(content: "nothing to do")
-//        itemArray.append(item1)
-//        let item3 = ToDoItem(content: "nothing to eat")
-//        itemArray.append(item3)
-//        let item2 = ToDoItem(content: "nothing to drink")
-//        itemArray.append(item2)
-        loadItems()
+//        loadItems()
         // Do any additional setup after loading the view, typically from a nib.
     }
 
-
-//    override func didReceiveMemoryWarning() {
-//        super.didReceiveMemoryWarning()
-//        // Dispose of any resources that can be recreated.
-//    }
 
     //MARK - TableViw Datasource Methods
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
@@ -62,7 +56,7 @@ class ToDoListController: UITableViewController {
         itemArray[indexPath.row].isDone = !itemArray[indexPath.row].isDone
         
         if let cell = tableView.cellForRow(at: indexPath)  {
-            
+
             cell.accessoryType = itemArray[indexPath.row].isDone ? .checkmark : .none
 
             tableView.deselectRow(at: indexPath, animated: true)
@@ -82,7 +76,17 @@ class ToDoListController: UITableViewController {
             // when the user clicks
             print("success")
             print(textField.text!)
-            self.itemArray.append(ToDoItem(content: textField.text!, isDone: false))
+            
+            
+            var newItem = ToDoItem(context: self.context)
+            
+            newItem.content = textField.text!
+            newItem.isDone = false
+            newItem.parentCategory = self.selectedCategory
+            
+            self.itemArray.append(newItem)
+            // methods to save without DB:
+//            self.itemArray.append(ToDoItem(content: textField.text!, isDone: false))
             
 //            self.defaults.set(self.itemArray, forKey: self.USER_DEFAULTS_DATA_KEY)
             
@@ -104,29 +108,65 @@ class ToDoListController: UITableViewController {
     }
     
     func saveItems(){
-        let encoder = PropertyListEncoder()
+//        let encoder = PropertyListEncoder()
         
         do {
-            let data = try encoder.encode(itemArray)
-            try data.write(to: dataFilePath!)
-            
+//            let data = try encoder.encode(itemArray)
+//            try data.write(to: dataFilePath!)
+            try context.save()
         }
         catch {
-            print("error writing file")
+            print("error saving context")
         }
     }
     
-    func loadItems(){
-        if let data = try? Data(contentsOf: dataFilePath!){
-            let decoder = PropertyListDecoder()
-            do{
-                itemArray = try decoder.decode([ToDoItem].self, from: data)
-            }
-            catch{
-                print("error uploading data from plist file")
+    func loadItems(with request : NSFetchRequest<ToDoItem> = ToDoItem.fetchRequest()){
+        
+        do{
+            itemArray = try context.fetch(request)
+        }
+        catch{
+            print("error requesting data")
+        }
+        
+//        if let data = try? Data(contentsOf: dataFilePath!){
+//            let decoder = PropertyListDecoder()
+//            do{
+//                itemArray = try decoder.decode([ToDoItem].self, from: data)
+//            }
+//            catch{
+//                print("error uploading data from plist file")
+//            }
+//        }
+    }
+    
+}
+
+extension ToDoListController: UISearchBarDelegate{
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+        let request: NSFetchRequest<ToDoItem> = ToDoItem.fetchRequest()
+        
+        let predicate = NSPredicate(format: "content CONTAINS[cd] %@", searchBar.text!)
+        
+        request.predicate = predicate
+        
+        let sortD = NSSortDescriptor(key: "content", ascending: true)
+        
+        request.sortDescriptors = [sortD]
+        
+        loadItems(with: request)
+        
+        tableView.reloadData()
+    }
+    
+    func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+        if searchBar.text?.count == 0 {
+            loadItems()
+            
+            DispatchQueue.main.async{
+                searchBar.resignFirstResponder()
             }
         }
     }
-    
 }
 
