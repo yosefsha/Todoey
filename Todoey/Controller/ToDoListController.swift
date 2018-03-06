@@ -7,10 +7,13 @@
 //
 
 import UIKit
-import CoreData
+import RealmSwift
 
 class ToDoListController: UITableViewController {
-    var itemArray: [ToDoItem] = []
+    
+    let realm = try! Realm()
+    
+    var itemArray: Results<ToDoItem>?
     
     var selectedCategory: Category? {
         didSet {
@@ -19,10 +22,6 @@ class ToDoListController: UITableViewController {
     }
     
     @IBOutlet weak var toDoSearchBar: UISearchBar!
-    
-    //    let dataFilePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("Items.plist")
-    
-    let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -36,15 +35,16 @@ class ToDoListController: UITableViewController {
 
     //MARK - TableViw Datasource Methods
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return itemArray.count
+        return itemArray?.count ?? 1
     }
     
     
    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+    
     let cell = tableView.dequeueReusableCell(withIdentifier: "ToDoItemCell", for:indexPath)
         
-        cell.textLabel?.text = itemArray[indexPath.row].content
-        cell.accessoryType = itemArray[indexPath.row].isDone ? .checkmark : .none
+    cell.textLabel?.text = itemArray?[indexPath.row].content ?? "no items in category"
+    cell.accessoryType = (itemArray?[indexPath.row].isDone)! ? .checkmark : .none
     
         return cell
     }
@@ -53,17 +53,29 @@ class ToDoListController: UITableViewController {
     
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         
-        itemArray[indexPath.row].isDone = !itemArray[indexPath.row].isDone
-        
-        if let cell = tableView.cellForRow(at: indexPath)  {
+        if let item = itemArray?[indexPath.row]{
+            if let currentCategory = self.selectedCategory{
+                do{
+                    try self.realm.write {
+                        
+                        item.isDone = !(item.isDone)
+                        
+                        if let cell = tableView.cellForRow(at: indexPath)  {
+                            
+                            cell.accessoryType = (itemArray?[indexPath.row].isDone)! ? .checkmark : .none
+                            
+                            tableView.deselectRow(at: indexPath, animated: true)
+                        }
+//                        currentCategory.items.append(item)
+                    }
+                }
+                catch{
+                    print("error saving data")
+                }
 
-            cell.accessoryType = itemArray[indexPath.row].isDone ? .checkmark : .none
-
-            tableView.deselectRow(at: indexPath, animated: true)
+        //        self.saveItems((itemArray?[indexPath.row])!)
+            }
         }
-        
-        self.saveItems()
-        
     }
     
     
@@ -74,23 +86,29 @@ class ToDoListController: UITableViewController {
         
         let action = UIAlertAction(title: "Add item", style: .default) { (action) in
             // when the user clicks
-            print("success")
-            print(textField.text!)
+
+            print("add item text: \(textField.text!)")
             
             
-            var newItem = ToDoItem(context: self.context)
-            
-            newItem.content = textField.text!
-            newItem.isDone = false
-            newItem.parentCategory = self.selectedCategory
-            
-            self.itemArray.append(newItem)
-            // methods to save without DB:
-//            self.itemArray.append(ToDoItem(content: textField.text!, isDone: false))
-            
-//            self.defaults.set(self.itemArray, forKey: self.USER_DEFAULTS_DATA_KEY)
-            
-            self.saveItems()
+            if let currentCategory = self.selectedCategory{
+                do{
+                    try self.realm.write {
+        
+                        let newItem = ToDoItem()
+                        
+                        newItem.content = textField.text!
+                        newItem.isDone = false
+                        newItem.dateCreated = Date()
+                        currentCategory.items.append(newItem)
+
+                    }
+                }
+                catch{
+                    print("error saving data")
+                }
+        
+            }
+
 
             self.tableView.reloadData()
         }
@@ -107,23 +125,22 @@ class ToDoListController: UITableViewController {
         present(alert, animated: true, completion: nil)
     }
     
-    func saveItems(){
-//        let encoder = PropertyListEncoder()
-        
-        do {
-//            let data = try encoder.encode(itemArray)
-//            try data.write(to: dataFilePath!)
-            try context.save()
-        }
-        catch {
-            print("error saving context")
-        }
-    }
+//    func saveItems(_ item: ToDoItem){
+//
+//        do {
+//
+//            try realm.write {
+//                try realm.add(item)
+//            }        }
+//        catch {
+//            print("error saving context")
+//        }
+//    }
     
-    func loadItems(with request : NSFetchRequest<ToDoItem> = ToDoItem.fetchRequest()){
+    func loadItems(){
         
         do{
-            itemArray = try context.fetch(request)
+            itemArray = try selectedCategory?.items.sorted(byKeyPath: "content", ascending: true)
         }
         catch{
             print("error requesting data")
@@ -144,17 +161,8 @@ class ToDoListController: UITableViewController {
 
 extension ToDoListController: UISearchBarDelegate{
     func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
-        let request: NSFetchRequest<ToDoItem> = ToDoItem.fetchRequest()
         
-        let predicate = NSPredicate(format: "content CONTAINS[cd] %@", searchBar.text!)
-        
-        request.predicate = predicate
-        
-        let sortD = NSSortDescriptor(key: "content", ascending: true)
-        
-        request.sortDescriptors = [sortD]
-        
-        loadItems(with: request)
+        itemArray = itemArray?.filter("content CONTAINS[cd] %@", searchBar.text!).sorted(byKeyPath: "dateCreated", ascending: false)
         
         tableView.reloadData()
     }
